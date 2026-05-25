@@ -2,32 +2,26 @@ package com.remoteclaude.ui.session
 
 import android.util.Base64
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.remoteclaude.crypto.E2EEncryption
 import com.remoteclaude.network.RelayEvent
 import com.remoteclaude.network.RelayService
 import com.remoteclaude.network.WebSocketClient
+import com.remoteclaude.terminal.StyledLine
+import com.remoteclaude.terminal.TerminalClient
+import com.remoteclaude.ui.terminal.AnsiTerminalView
+import com.remoteclaude.ui.terminal.SpecialKeysRow
+import com.remoteclaude.ui.terminal.TerminalInputBar
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -38,13 +32,22 @@ fun TerminalScreen(
     onDisconnected: () -> Unit
 ) {
     val relayService = remember { RelayService(WebSocketClient(), E2EEncryption()) }
-    var terminalOutput by remember { mutableStateOf("") }
-    var inputText by remember { mutableStateOf(TextFieldValue("")) }
+    val terminalClient = remember { TerminalClient() }
+    var terminalLines by remember { mutableStateOf(emptyList<StyledLine>()) }
+    var rawOutput by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("connecting") }
     var permissionRequest by remember { mutableStateOf<RelayEvent.PermissionRequest?>(null) }
-    val scrollState = rememberScrollState()
+    var showSpecialKeys by remember { mutableStateOf(false) }
 
-    // Connect to relay and collect events
+    // Feed terminal output to the client
+    terminalClient.callback = object : TerminalClient.TerminalCallback {
+        override fun onTerminalChanged() {
+            terminalLines = terminalClient.getStyledLines()
+        }
+        override fun onSessionTitleChanged(title: String) {}
+    }
+
+    // Connect to relay
     LaunchedEffect(relayUrl) {
         relayService.connect(relayUrl)
     }
@@ -53,12 +56,10 @@ fun TerminalScreen(
         relayService.events.collect { event ->
             when (event) {
                 is RelayEvent.TerminalOutput -> {
+                    terminalClient.feed(event.data)
+                    // Also keep raw output as fallback
                     val decoded = Base64.decode(event.data, Base64.DEFAULT)
-                    val text = String(decoded, Charsets.UTF_8)
-                    terminalOutput += text
-                    // Auto-scroll to bottom
-                    delay(50)
-                    scrollState.scrollTo(scrollState.maxValue)
+                    rawOutput += String(decoded, Charsets.UTF_8)
                 }
                 is RelayEvent.PermissionRequest -> {
                     permissionRequest = event
@@ -70,21 +71,29 @@ fun TerminalScreen(
                     onDisconnected()
                 }
                 is RelayEvent.Error -> {
-                    terminalOutput += "\n[Error] ${event.message}\n"
+                    rawOutput += "\n[Error] ${event.message}\n"
                 }
                 else -> {}
             }
         }
     }
 
+    // Send terminal resize when connected
+    LaunchedEffect(status) {
+        if (status == "active") {
+            relayService.sendTerminalResize(80, 24)
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
-        // Top bar with status
+        // Top bar
         TopAppBar(
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val statusColor = when (status) {
                         "active" -> Color(0xFF4CAF50)
                         "waiting_permission" -> Color(0xFFFFC107)
+                        "idle" -> Color(0xFF58A6FF)
                         else -> Color.Gray
                     }
                     Box(
@@ -94,12 +103,23 @@ fun TerminalScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        "Session ${sessionId.take(8)}...",
-                        style = MaterialTheme.typography.titleSmall
+                        terminalClient.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1
                     )
                 }
             },
             actions = {
+                // Toggle special keys
+                IconButton(onClick = { showSpecialKeys = !showSpecialKeys }) {
+                    Icon(
+                        Icons.Default.Keyboard,
+                        contentDescription = "Keyboard",
+                        tint = if (showSpecialKeys) MaterialTheme.colorScheme.primary
+                               else MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                // Disconnect
                 IconButton(onClick = {
                     relayService.disconnect()
                     onDisconnected()
@@ -109,116 +129,102 @@ fun TerminalScreen(
             }
         )
 
-        // Permission card (shown when permission is requested)
-        permissionRequest?.let { perm ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer
-                )
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        "权限请求: ${perm.tool}",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        perm.detail.take(200),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                relayService.sendPermissionResponse(perm.id, false)
-                                permissionRequest = null
-                            }
-                        ) {
-                            Text("拒绝")
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                relayService.sendPermissionResponse(perm.id, true)
-                                permissionRequest = null
-                            }
-                        ) {
-                            Text("批准")
-                        }
+        // Permission card
+        AnimatedVisibility(visible = permissionRequest != null) {
+            permissionRequest?.let { perm ->
+                PermissionCard(
+                    permission = perm,
+                    onApprove = {
+                        relayService.sendPermissionResponse(perm.id, true)
+                        permissionRequest = null
+                    },
+                    onReject = {
+                        relayService.sendPermissionResponse(perm.id, false)
+                        permissionRequest = null
                     }
-                }
+                )
             }
         }
 
-        // Terminal output
+        // Terminal view - try ANSI rendering, fallback to raw text
         Box(
             modifier = Modifier
                 .weight(1f)
                 .background(Color(0xFF0D1117))
-                .padding(8.dp)
-                .verticalScroll(scrollState)
-                .horizontalScroll(rememberScrollState())
         ) {
-            Text(
-                text = terminalOutput,
-                color = Color(0xFFE6EDF3),
-                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                fontSize = 13.sp,
-                lineHeight = 18.sp,
-                softWrap = false
-            )
+            if (terminalLines.isNotEmpty()) {
+                AnsiTerminalView(
+                    lines = terminalLines,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                // Fallback: raw text
+                androidx.compose.foundation.layout.Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(8.dp)
+                ) {
+                    androidx.compose.material3.Text(
+                        text = rawOutput,
+                        color = Color(0xFFE6EDF3),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+        }
+
+        // Special keys row
+        AnimatedVisibility(visible = showSpecialKeys) {
+            SpecialKeysRow(relayService = relayService)
         }
 
         // Input bar
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp)
-                .imePadding(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedTextField(
-                value = inputText,
-                onValueChange = { inputText = it },
-                modifier = Modifier.weight(1f),
-                placeholder = { Text("输入命令...") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Text,
-                    imeAction = androidx.compose.ui.text.input.ImeAction.Send
-                ),
-                keyboardActions = KeyboardActions(
-                    onSend = {
-                        if (inputText.text.isNotEmpty()) {
-                            relayService.sendTerminalInput(inputText.text + "\n")
-                            inputText = TextFieldValue("")
-                        }
-                    }
-                )
-            )
+        TerminalInputBar(relayService = relayService)
+    }
+}
 
-            IconButton(
-                onClick = {
-                    if (inputText.text.isNotEmpty()) {
-                        relayService.sendTerminalInput(inputText.text + "\n")
-                        inputText = TextFieldValue("")
-                    }
-                }
+@Composable
+private fun PermissionCard(
+    permission: RelayEvent.PermissionRequest,
+    onApprove: () -> Unit,
+    onReject: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer
+        )
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                "权限请求: ${permission.tool}",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                permission.detail.take(300),
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
             ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Send,
-                    contentDescription = "Send",
-                    tint = MaterialTheme.colorScheme.primary
-                )
+                OutlinedButton(onClick = onReject) {
+                    Text("拒绝")
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(onClick = onApprove) {
+                    Text("批准")
+                }
             }
         }
     }

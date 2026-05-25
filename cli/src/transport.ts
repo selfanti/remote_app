@@ -3,15 +3,19 @@ import { createMessage } from "../../shared/protocol.js";
 
 type MessageHandler = (msg: any) => void;
 
+const MAX_OFFLINE_QUEUE = 1000;
+
 export class Transport {
   private ws: WebSocket | null = null;
   private url: string;
   private onMessage: MessageHandler;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 10;
+  private maxReconnectAttempts = 20;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
   private _isConnected = false;
+  private offlineQueue: string[] = [];
+  private intentionallyClosed = false;
 
   get isConnected(): boolean {
     return this._isConnected;
@@ -23,6 +27,7 @@ export class Transport {
   }
 
   connect(): Promise<void> {
+    this.intentionallyClosed = false;
     return new Promise((resolve, reject) => {
       try {
         this.ws = new WebSocket(this.url);
@@ -31,10 +36,19 @@ export class Transport {
         return;
       }
 
+      const connectTimeout = setTimeout(() => {
+        if (!this._isConnected) {
+          this.ws?.terminate();
+          reject(new Error("Connection timeout"));
+        }
+      }, 15_000);
+
       this.ws.on("open", () => {
+        clearTimeout(connectTimeout);
         this._isConnected = true;
         this.reconnectAttempts = 0;
         this.startPing();
+        this.flushOfflineQueue();
         resolve();
       });
 
@@ -47,13 +61,17 @@ export class Transport {
         }
       });
 
-      this.ws.on("close", () => {
+      this.ws.on("close", (code, reason) => {
+        clearTimeout(connectTimeout);
         this._isConnected = false;
         this.stopPing();
-        this.scheduleReconnect();
+        if (!this.intentionallyClosed) {
+          this.scheduleReconnect();
+        }
       });
 
       this.ws.on("error", (err) => {
+        clearTimeout(connectTimeout);
         console.error("WebSocket error:", err.message);
         if (!this._isConnected) {
           reject(err);
@@ -63,23 +81,45 @@ export class Transport {
   }
 
   send(msg: any) {
+    const serialized = JSON.stringify(msg);
     if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(msg));
+      this.ws.send(serialized);
+    } else {
+      // Queue message for later delivery
+      if (this.offlineQueue.length < MAX_OFFLINE_QUEUE) {
+        this.offlineQueue.push(serialized);
+      }
     }
   }
 
   close() {
+    this.intentionallyClosed = true;
     this.stopPing();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
     }
-    this.ws?.close();
+    this.ws?.close(1000, "Client disconnecting");
     this.ws = null;
+    this.offlineQueue = [];
+  }
+
+  private flushOfflineQueue() {
+    while (this.offlineQueue.length > 0 && this.ws?.readyState === WebSocket.OPEN) {
+      const msg = this.offlineQueue.shift()!;
+      this.ws.send(msg);
+    }
+    if (this.offlineQueue.length > 0) {
+      console.log(`Flushed offline queue, ${this.offlineQueue.length} messages remaining`);
+    }
   }
 
   private startPing() {
     this.pingInterval = setInterval(() => {
-      this.send(createMessage("ping"));
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.ws.ping();
+        this.send(createMessage("ping"));
+      }
     }, 30_000);
   }
 
@@ -91,17 +131,26 @@ export class Transport {
   }
 
   private scheduleReconnect() {
+    if (this.intentionallyClosed) return;
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.error("Max reconnect attempts reached. Giving up.");
-      return;
+      process.exit(1);
     }
-    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30_000);
+
+    // Exponential backoff with jitter: 1s, 2s, 4s, 8s, 16s, 30s, 30s, ...
+    const baseDelay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30_000);
+    const jitter = Math.random() * 1000;
+    const delay = baseDelay + jitter;
     this.reconnectAttempts++;
+
     console.log(
-      `Reconnecting in ${delay / 1000}s (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`
+      `Reconnecting in ${(delay / 1000).toFixed(1)}s (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`
     );
+
     this.reconnectTimer = setTimeout(() => {
-      this.connect().catch(() => {});
+      this.connect().catch((err) => {
+        console.error("Reconnect failed:", err.message);
+      });
     }, delay);
   }
 }
