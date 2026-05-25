@@ -9,20 +9,22 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/bin/remote-claude.js",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "test": "vitest run"
   },
   "dependencies": {
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
     "node-pty": "^1.0.0",
-    "ws": "^8.18.0",
+    "ora": "^8.2.0",
     "tweetnacl": "^1.0.3",
     "tweetnacl-util": "^0.15.1",
-    "commander": "^13.1.0",
-    "chalk": "^5.4.1",
-    "ora": "^8.2.0"
+    "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@types/ws": "^8.18.0",
     "@types/node": "^22.15.0",
-    "typescript": "^5.8.3"
+    "@types/ws": "^8.18.0",
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.7"
   }
 }

@@ -94,6 +94,7 @@ export class Transport {
 
   close() {
     this.intentionallyClosed = true;
+    this._isConnected = false;
     this.stopPing();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);

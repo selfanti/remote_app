@@ -26,7 +26,7 @@ export class PermissionHandler {
     /\[Y\/n\]/,
     /\[y\/N\]/,
     /\[yes\/no\]/i,
-    /^.*Allow\s+\w+\s*(tool\s+)?(to\s+)?/im,
+    /^.*Allow\s+\w+\s+tool/i,
   ];
 
   private static readonly TOOL_PATTERNS = [
