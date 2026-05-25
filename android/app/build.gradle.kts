@@ -67,9 +67,8 @@ dependencies {
     // Networking
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
-    // E2E Encryption - NaCl/libsodium
-    implementation("com.goterl:lazysodium-android:5.0.2@aar")
-    implementation("net.java.dev.jna:jna:5.14.0@aar")
+    // E2E Encryption - Bouncy Castle (pure Java, no native deps)
+    implementation("org.bouncycastle:bcprov-jdk18on:1.80")
 
     // Serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
