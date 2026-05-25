@@ -27,7 +27,7 @@ fun PairingScreen(
     var pairCode by remember { mutableStateOf("") }
     var isConnecting by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    var showSettings by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(defaultRelayUrl.isBlank()) }
     var pendingPairCode by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(relayService) {
@@ -100,7 +100,7 @@ fun PairingScreen(
                 value = relayUrl,
                 onValueChange = { relayUrl = it },
                 label = { Text("服务器地址") },
-                placeholder = { Text("ws://your-server:8080") },
+                placeholder = { Text("wss://your-server") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
@@ -142,7 +142,10 @@ fun PairingScreen(
         // Connect button
         Button(
             onClick = {
-                if (pairCode.length == 6) {
+                if (relayUrl.isBlank()) {
+                    errorMessage = "请先填写服务器地址"
+                    showSettings = true
+                } else if (pairCode.length == 6) {
                     isConnecting = true
                     errorMessage = null
                     relayUrl = RelayService.normalizeRelayUrl(relayUrl)
@@ -154,7 +157,7 @@ fun PairingScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp),
-            enabled = pairCode.length == 6 && !isConnecting
+            enabled = pairCode.length == 6 && !isConnecting && relayUrl.isNotBlank()
         ) {
             if (isConnecting) {
                 CircularProgressIndicator(

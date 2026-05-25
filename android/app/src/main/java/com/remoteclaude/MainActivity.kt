@@ -21,6 +21,11 @@ import com.remoteclaude.ui.session.PairingScreen
 import com.remoteclaude.ui.session.TerminalScreen
 
 class MainActivity : ComponentActivity() {
+    private companion object {
+        const val PREFS_NAME = "remote_claude"
+        const val KEY_RELAY_URL = "relay_url"
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -30,8 +35,13 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
+                    val prefs = remember {
+                        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                    }
                     var sessionId by rememberSaveable { mutableStateOf<String?>(null) }
-                    var relayUrl by rememberSaveable { mutableStateOf("ws://10.0.2.2:8080") }
+                    var relayUrl by rememberSaveable {
+                        mutableStateOf(prefs.getString(KEY_RELAY_URL, "") ?: "")
+                    }
                     val relayService = remember { RelayService(WebSocketClient(), E2EEncryption()) }
 
                     if (sessionId == null) {
@@ -40,6 +50,7 @@ class MainActivity : ComponentActivity() {
                             defaultRelayUrl = relayUrl,
                             onPaired = { url, sid ->
                                 relayUrl = url
+                                prefs.edit().putString(KEY_RELAY_URL, url).apply()
                                 sessionId = sid
                             }
                         )
