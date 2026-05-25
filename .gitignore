@@ -1,0 +1,29 @@
+node_modules/
+dist/
+*.js.map
+*.d.ts
+*.d.ts.map
+!cli/bin/*.ts
+!server/src/*.ts
+
+# Android
+*.apk
+*.aab
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+
+# Database
+*.db
+
+# Keys
+~/.remote-claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
