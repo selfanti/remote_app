@@ -29,27 +29,37 @@ fun PairingScreen(
     var isConnecting by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showSettings by remember { mutableStateOf(false) }
+    var pendingPairCode by remember { mutableStateOf<String?>(null) }
 
     val relayService = remember { RelayService(WebSocketClient(), E2EEncryption()) }
 
     LaunchedEffect(relayService) {
-        relayService.events.collect { event ->
-            when (event) {
-                is RelayEvent.PairConfirmed -> {
-                    onPaired(relayUrl, event.sessionId)
-                }
-                is RelayEvent.PairRejected -> {
-                    errorMessage = "配对失败: ${event.reason}"
-                    isConnecting = false
-                }
-                is RelayEvent.Error -> {
-                    errorMessage = "${event.code}: ${event.message}"
-                    isConnecting = false
-                }
-                is RelayEvent.Disconnected -> {
-                    errorMessage = "连接断开"
-                    isConnecting = false
-                }
+            relayService.events.collect { event ->
+                when (event) {
+                    is RelayEvent.Connected -> {
+                        pendingPairCode?.let { code ->
+                            relayService.submitPairCode(code)
+                        }
+                    }
+                    is RelayEvent.PairConfirmed -> {
+                        pendingPairCode = null
+                        onPaired(relayUrl, event.sessionId)
+                    }
+                    is RelayEvent.PairRejected -> {
+                        pendingPairCode = null
+                        errorMessage = "配对失败: ${event.reason}"
+                        isConnecting = false
+                    }
+                    is RelayEvent.Error -> {
+                        pendingPairCode = null
+                        errorMessage = "${event.code}: ${event.message}"
+                        isConnecting = false
+                    }
+                    is RelayEvent.Disconnected -> {
+                        pendingPairCode = null
+                        errorMessage = "连接断开"
+                        isConnecting = false
+                    }
                 else -> {}
             }
         }
@@ -139,8 +149,9 @@ fun PairingScreen(
                     isConnecting = true
                     errorMessage = null
                     relayUrl = RelayService.normalizeRelayUrl(relayUrl)
+                    pendingPairCode = pairCode
+                    relayService.disconnect()
                     relayService.connect(relayUrl)
-                    relayService.submitPairCode(pairCode)
                 }
             },
             modifier = Modifier

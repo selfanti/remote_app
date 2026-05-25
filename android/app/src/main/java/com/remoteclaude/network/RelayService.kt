@@ -19,6 +19,7 @@ data class InnerPayload(
 )
 
 sealed class RelayEvent {
+    data object Connected : RelayEvent()
     data class PairCodeReceived(val code: String, val sessionId: String) : RelayEvent()
     data class PairConfirmed(val peerPublicKey: String, val sessionId: String) : RelayEvent()
     data class PairRejected(val reason: String) : RelayEvent()
@@ -44,8 +45,10 @@ class RelayService(
     fun connect(url: String) {
         val normalizedUrl = normalizeRelayUrl(url)
         CoroutineScope(Dispatchers.IO).launch {
+            var failed = false
             wsClient.connect(normalizedUrl)
                 .catch { e ->
+                    failed = true
                     Timber.e(e, "Relay connection failed")
                     _events.value = RelayEvent.Error("CONNECTION_FAILED", e.message ?: "Connection failed")
                     _isConnected.value = false
@@ -53,10 +56,11 @@ class RelayService(
                 .collect { msg ->
                     handleMessage(msg)
                 }
-            _events.value = RelayEvent.Disconnected
-            _isConnected.value = false
+            if (!failed) {
+                _events.value = RelayEvent.Disconnected
+                _isConnected.value = false
+            }
         }
-        _isConnected.value = true
     }
 
     fun submitPairCode(code: String) {
@@ -122,6 +126,11 @@ class RelayService(
 
     private fun handleMessage(msg: WireMessage) {
         when (msg.type) {
+            "__connected" -> {
+                _isConnected.value = true
+                _events.value = RelayEvent.Connected
+            }
+
             "pair.code" -> {
                 val payload = msg.payload?.jsonObject ?: return
                 val code = payload["code"]?.jsonPrimitive?.content ?: return

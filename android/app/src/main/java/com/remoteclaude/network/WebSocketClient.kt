@@ -47,6 +47,7 @@ class WebSocketClient {
                 Timber.d("WebSocket connected")
                 isConnected = true
                 reconnectAttempts = 0
+                trySend(WireMessage(type = "__connected", timestamp = System.currentTimeMillis()))
                 flushOfflineQueue(ws)
             }
 
