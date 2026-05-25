@@ -98,7 +98,13 @@ Connected!
 
 ### 3. 安装手机 App
 
-用 Android Studio 打开 `android/` 目录，连接手机构建安装。
+**方式 A：下载预构建 APK（推荐）**
+
+推送到 GitHub 后，Actions 会自动构建 APK。进入仓库的 **Actions → Build Android APK → Artifacts** 下载 `remote-claude-debug`。
+
+**方式 B：Android Studio 本地构建**
+
+用 Android Studio 打开 `android/` 目录，连接手机直接运行。
 
 打开 App 后：
 1. 输入服务器地址（如 `ws://your-server.com:8080`）
