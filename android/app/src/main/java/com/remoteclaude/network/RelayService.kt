@@ -7,13 +7,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.*
 import timber.log.Timber
 
 @Serializable
 data class InnerPayload(
     val type: String,
-    val data: kotlinx.serialization.json.JsonElement? = null,
+    val data: JsonElement? = null,
     val timestamp: Long
 )
 
@@ -55,9 +55,9 @@ class RelayService(
         wsClient.send(
             WireMessage(
                 type = "pair.submit",
-                payload = kotlinx.serialization.json.buildJsonObject {
-                    put("code", kotlinx.serialization.json.JsonPrimitive(code))
-                    put("appPublicKey", kotlinx.serialization.json.JsonPrimitive(crypto.publicKeyBase64))
+                payload = buildJsonObject {
+                    put("code", JsonPrimitive(code))
+                    put("appPublicKey", JsonPrimitive(crypto.publicKeyBase64))
                 },
                 timestamp = System.currentTimeMillis()
             )
@@ -65,34 +65,34 @@ class RelayService(
     }
 
     fun sendTerminalInput(input: String) {
-        sendEncrypted("terminal.input", kotlinx.serialization.json.buildJsonObject {
-            put("input", kotlinx.serialization.json.JsonPrimitive(input))
+        sendEncrypted("terminal.input", buildJsonObject {
+            put("input", JsonPrimitive(input))
         })
     }
 
     fun sendTerminalResize(cols: Int, rows: Int) {
-        sendEncrypted("terminal.resize", kotlinx.serialization.json.buildJsonObject {
-            put("cols", kotlinx.serialization.json.JsonPrimitive(cols))
-            put("rows", kotlinx.serialization.json.JsonPrimitive(rows))
+        sendEncrypted("terminal.resize", buildJsonObject {
+            put("cols", JsonPrimitive(cols))
+            put("rows", JsonPrimitive(rows))
         })
     }
 
     fun sendPermissionResponse(id: String, approved: Boolean, input: String? = null) {
-        sendEncrypted("permission.response", kotlinx.serialization.json.buildJsonObject {
-            put("id", kotlinx.serialization.json.JsonPrimitive(id))
-            put("approved", kotlinx.serialization.json.JsonPrimitive(approved))
-            if (input != null) put("input", kotlinx.serialization.json.JsonPrimitive(input))
+        sendEncrypted("permission.response", buildJsonObject {
+            put("id", JsonPrimitive(id))
+            put("approved", JsonPrimitive(approved))
+            if (input != null) put("input", JsonPrimitive(input))
         })
     }
 
     fun sendVoiceTranscript(text: String) {
-        sendEncrypted("voice.transcript", kotlinx.serialization.json.buildJsonObject {
-            put("text", kotlinx.serialization.json.JsonPrimitive(text))
-            put("isFinal", kotlinx.serialization.json.JsonPrimitive(true))
+        sendEncrypted("voice.transcript", buildJsonObject {
+            put("text", JsonPrimitive(text))
+            put("isFinal", JsonPrimitive(true))
         })
     }
 
-    private fun sendEncrypted(type: String, data: kotlinx.serialization.json.JsonElement) {
+    private fun sendEncrypted(type: String, data: JsonElement) {
         val inner = InnerPayload(
             type = type,
             data = data,
@@ -104,8 +104,8 @@ class RelayService(
         wsClient.send(
             WireMessage(
                 type = "encrypted",
-                payload = kotlinx.serialization.json.buildJsonObject {
-                    put("ciphertext", kotlinx.serialization.json.JsonPrimitive(ciphertext))
+                payload = buildJsonObject {
+                    put("ciphertext", JsonPrimitive(ciphertext))
                 },
                 timestamp = System.currentTimeMillis()
             )
@@ -115,15 +115,15 @@ class RelayService(
     private fun handleMessage(msg: WireMessage) {
         when (msg.type) {
             "pair.code" -> {
-                val payload = msg.payload?.jsonObject
-                val code = payload?.get("code")?.jsonPrimitive?.content ?: return
+                val payload = msg.payload?.jsonObject ?: return
+                val code = payload["code"]?.jsonPrimitive?.content ?: return
                 val sessionId = payload["sessionId"]?.jsonPrimitive?.content ?: return
                 _events.value = RelayEvent.PairCodeReceived(code, sessionId)
             }
 
             "pair.confirmed" -> {
-                val payload = msg.payload?.jsonObject
-                val peerKey = payload?.get("peerPublicKey")?.jsonPrimitive?.content ?: return
+                val payload = msg.payload?.jsonObject ?: return
+                val peerKey = payload["peerPublicKey"]?.jsonPrimitive?.content ?: return
                 val sessionId = payload["sessionId"]?.jsonPrimitive?.content ?: return
                 crypto.setPeerPublicKey(peerKey)
                 _events.value = RelayEvent.PairConfirmed(peerKey, sessionId)
@@ -161,8 +161,8 @@ class RelayService(
 
             when (inner.type) {
                 "terminal.output" -> {
-                    val data = inner.data?.jsonObject
-                    val output = data?.get("output")?.jsonPrimitive?.content ?: return
+                    val data = inner.data?.jsonObject ?: return
+                    val output = data["output"]?.jsonPrimitive?.content ?: return
                     _events.value = RelayEvent.TerminalOutput(output)
                 }
 

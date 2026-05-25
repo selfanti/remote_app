@@ -36,14 +36,14 @@ class WebSocketClient {
         val request = Request.Builder().url(url).build()
 
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
-            override fun onOpen(webSocket: WebSocket, response: Response) {
+            override fun onOpen(ws: WebSocket, response: Response) {
                 Timber.d("WebSocket connected")
                 isConnected = true
                 reconnectAttempts = 0
-                flushOfflineQueue(webSocket)
+                flushOfflineQueue(ws)
             }
 
-            override fun onMessage(webSocket: WebSocket, text: String) {
+            override fun onMessage(ws: WebSocket, text: String) {
                 try {
                     val msg = json.decodeFromString<WireMessage>(text)
                     trySend(msg)
@@ -52,11 +52,11 @@ class WebSocketClient {
                 }
             }
 
-            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                webSocket.close(1000, null)
+            override fun onClosing(ws: WebSocket, code: Int, reason: String) {
+                ws.close(1000, null)
             }
 
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+            override fun onClosed(ws: WebSocket, code: Int, reason: String) {
                 Timber.d("WebSocket closed: $code $reason")
                 isConnected = false
                 if (!intentionallyClosed) {
@@ -65,7 +65,7 @@ class WebSocketClient {
                 close()
             }
 
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
                 Timber.e(t, "WebSocket failure")
                 isConnected = false
                 if (!intentionallyClosed) {
@@ -134,7 +134,6 @@ class WebSocketClient {
 
         reconnectJob = CoroutineScope(Dispatchers.IO).launch {
             delay(delay)
-            // The Flow collector will handle the reconnection
             connect(url)
         }
     }

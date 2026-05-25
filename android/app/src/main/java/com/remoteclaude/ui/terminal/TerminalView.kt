@@ -60,8 +60,8 @@ fun AnsiTerminalView(
         for (line in lines) {
             var xOffset = 0f
             for (span in line.spans) {
-                val textColor = resolveColor(span.style.foregroundColor, FG_COLOR)
-                val bgColor = resolveColor(span.style.backgroundColor, null)
+                val textColor = resolveColor(span.style.foregroundColor) ?: FG_COLOR
+                val bgColor = resolveColor(span.style.backgroundColor)
 
                 if (bgColor != null) {
                     val width = span.text.length * charWidth
@@ -104,11 +104,11 @@ fun AnsiTerminalView(
     }
 }
 
-private fun resolveColor(colorIndex: Int, default: Color?): Color? {
-    if (colorIndex < 0 || colorIndex == 0x1FFFFFFF) return default
+private fun resolveColor(colorIndex: Int): Color? {
+    if (colorIndex < 0 || colorIndex == 0x1FFFFFFF) return null
     // Standard ANSI 16 colors + 256 color extension
     return when {
-        colorIndex < 16 -> ANSI_COLORS[colorIndex] ?: default
+        colorIndex < 16 -> ANSI_COLORS[colorIndex]
         colorIndex in 16..231 -> {
             // 216 color cube
             val idx = colorIndex - 16
@@ -122,6 +122,6 @@ private fun resolveColor(colorIndex: Int, default: Color?): Color? {
             val gray = 8 + (colorIndex - 232) * 10
             Color(gray, gray, gray)
         }
-        else -> default
+        else -> null
     }
 }

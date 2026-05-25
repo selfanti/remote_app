@@ -1,6 +1,7 @@
 package com.remoteclaude.ui.session
 
 import android.util.Base64
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -22,7 +23,6 @@ import com.remoteclaude.terminal.TerminalClient
 import com.remoteclaude.ui.terminal.AnsiTerminalView
 import com.remoteclaude.ui.terminal.SpecialKeysRow
 import com.remoteclaude.ui.terminal.TerminalInputBar
-import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,15 +39,12 @@ fun TerminalScreen(
     var permissionRequest by remember { mutableStateOf<RelayEvent.PermissionRequest?>(null) }
     var showSpecialKeys by remember { mutableStateOf(false) }
 
-    // Feed terminal output to the client
     terminalClient.callback = object : TerminalClient.TerminalCallback {
         override fun onTerminalChanged() {
             terminalLines = terminalClient.getStyledLines()
         }
-        override fun onSessionTitleChanged(title: String) {}
     }
 
-    // Connect to relay
     LaunchedEffect(relayUrl) {
         relayService.connect(relayUrl)
     }
@@ -57,7 +54,6 @@ fun TerminalScreen(
             when (event) {
                 is RelayEvent.TerminalOutput -> {
                     terminalClient.feed(event.data)
-                    // Also keep raw output as fallback
                     val decoded = Base64.decode(event.data, Base64.DEFAULT)
                     rawOutput += String(decoded, Charsets.UTF_8)
                 }
@@ -78,7 +74,6 @@ fun TerminalScreen(
         }
     }
 
-    // Send terminal resize when connected
     LaunchedEffect(status) {
         if (status == "active") {
             relayService.sendTerminalResize(80, 24)
@@ -86,7 +81,6 @@ fun TerminalScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Top bar
         TopAppBar(
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -103,14 +97,13 @@ fun TerminalScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        terminalClient.title,
+                        "Session ${sessionId.take(8)}",
                         style = MaterialTheme.typography.titleSmall,
                         maxLines = 1
                     )
                 }
             },
             actions = {
-                // Toggle special keys
                 IconButton(onClick = { showSpecialKeys = !showSpecialKeys }) {
                     Icon(
                         Icons.Default.Keyboard,
@@ -119,7 +112,6 @@ fun TerminalScreen(
                                else MaterialTheme.colorScheme.onSurface
                     )
                 }
-                // Disconnect
                 IconButton(onClick = {
                     relayService.disconnect()
                     onDisconnected()
@@ -129,7 +121,6 @@ fun TerminalScreen(
             }
         )
 
-        // Permission card
         AnimatedVisibility(visible = permissionRequest != null) {
             permissionRequest?.let { perm ->
                 PermissionCard(
@@ -146,7 +137,6 @@ fun TerminalScreen(
             }
         }
 
-        // Terminal view - try ANSI rendering, fallback to raw text
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -158,30 +148,22 @@ fun TerminalScreen(
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
-                // Fallback: raw text
-                androidx.compose.foundation.layout.Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(8.dp)
-                ) {
-                    androidx.compose.material3.Text(
+                Box(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+                    Text(
                         text = rawOutput,
                         color = Color(0xFFE6EDF3),
                         fontFamily = FontFamily.Monospace,
                         fontSize = 13.sp,
-                        lineHeight = 18.sp,
-                        modifier = Modifier.fillMaxSize()
+                        lineHeight = 18.sp
                     )
                 }
             }
         }
 
-        // Special keys row
         AnimatedVisibility(visible = showSpecialKeys) {
             SpecialKeysRow(relayService = relayService)
         }
 
-        // Input bar
         TerminalInputBar(relayService = relayService)
     }
 }
@@ -218,13 +200,9 @@ private fun PermissionCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
-                OutlinedButton(onClick = onReject) {
-                    Text("拒绝")
-                }
+                OutlinedButton(onClick = onReject) { Text("拒绝") }
                 Spacer(modifier = Modifier.width(8.dp))
-                Button(onClick = onApprove) {
-                    Text("批准")
-                }
+                Button(onClick = onApprove) { Text("批准") }
             }
         }
     }
