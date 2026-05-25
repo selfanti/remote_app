@@ -14,13 +14,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.remoteclaude.crypto.E2EEncryption
 import com.remoteclaude.network.RelayEvent
 import com.remoteclaude.network.RelayService
-import com.remoteclaude.network.WebSocketClient
 
 @Composable
 fun PairingScreen(
+    relayService: RelayService,
     defaultRelayUrl: String,
     onPaired: (relayUrl: String, sessionId: String) -> Unit
 ) {
@@ -31,35 +30,33 @@ fun PairingScreen(
     var showSettings by remember { mutableStateOf(false) }
     var pendingPairCode by remember { mutableStateOf<String?>(null) }
 
-    val relayService = remember { RelayService(WebSocketClient(), E2EEncryption()) }
-
     LaunchedEffect(relayService) {
-            relayService.events.collect { event ->
-                when (event) {
-                    is RelayEvent.Connected -> {
-                        pendingPairCode?.let { code ->
-                            relayService.submitPairCode(code)
-                        }
+        relayService.events.collect { event ->
+            when (event) {
+                is RelayEvent.Connected -> {
+                    pendingPairCode?.let { code ->
+                        relayService.submitPairCode(code)
                     }
-                    is RelayEvent.PairConfirmed -> {
-                        pendingPairCode = null
-                        onPaired(relayUrl, event.sessionId)
-                    }
-                    is RelayEvent.PairRejected -> {
-                        pendingPairCode = null
-                        errorMessage = "配对失败: ${event.reason}"
-                        isConnecting = false
-                    }
-                    is RelayEvent.Error -> {
-                        pendingPairCode = null
-                        errorMessage = "${event.code}: ${event.message}"
-                        isConnecting = false
-                    }
-                    is RelayEvent.Disconnected -> {
-                        pendingPairCode = null
-                        errorMessage = "连接断开"
-                        isConnecting = false
-                    }
+                }
+                is RelayEvent.PairConfirmed -> {
+                    pendingPairCode = null
+                    onPaired(relayUrl, event.sessionId)
+                }
+                is RelayEvent.PairRejected -> {
+                    pendingPairCode = null
+                    errorMessage = "配对失败: ${event.reason}"
+                    isConnecting = false
+                }
+                is RelayEvent.Error -> {
+                    pendingPairCode = null
+                    errorMessage = "${event.code}: ${event.message}"
+                    isConnecting = false
+                }
+                is RelayEvent.Disconnected -> {
+                    pendingPairCode = null
+                    errorMessage = "连接断开"
+                    isConnecting = false
+                }
                 else -> {}
             }
         }

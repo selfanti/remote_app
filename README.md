@@ -29,25 +29,76 @@
 
 ## 快速开始
 
-### 1. 部署中继服务器
+### 使用前确认
 
-需要一台有公网 IP 的服务器（阿里云/腾讯云轻量应用服务器即可，最低配 1 核 1G）。
-如果你在 WSL2 中使用 Claude Code，并通过内网穿透暴露本机服务，建议中继服务器也运行在 WSL2 中，让穿透工具转发到 WSL2 的 `127.0.0.1:8080`。
+使用 RemoteClaude 时有三个进程参与：
+
+| 进程 | 运行位置 | 作用 |
+|------|----------|------|
+| 中继服务器 | 云服务器、WSL2 或 Windows | 转发 CLI 和手机 App 的加密消息 |
+| CLI 包装器 `remote-claude` | 你运行 Claude Code 的电脑环境 | 启动真正的 `claude` 子进程并显示配对码 |
+| Android App | 手机 | 输入服务器地址和配对码，远程控制终端 |
+
+如果你平时在 WSL2 里使用 Claude Code，推荐所有电脑端进程都跑在 WSL2：中继服务器、内网穿透、`remote-claude` 都在 WSL2 中启动。这样穿透工具的 `127.0.0.1:8080` 就会指向 WSL2 里的中继服务器。
+
+`remote-claude` 是单独命令，不会覆盖系统里的 `claude`。平时直接运行 `claude` 仍然是默认 Claude Code；只有显式运行 `remote-claude` 时才会启用手机远程控制。
+
+### 1. 启动中继服务器
+
+方式 A：WSL2 + 支持 HTTPS/WSS 的内网穿透
 
 ```bash
 cd server
 npm install
 npm run build
 
-# WSL2/Linux 直接运行
 HOST=127.0.0.1 PORT=8080 npm start
+```
 
-# Windows PowerShell
+然后启动你的内网穿透工具，确认它显示类似：
+
+```text
+内网地址: 127.0.0.1:8080
+浏览器访问: https://your-tunnel-domain
+```
+
+手机 App 和 CLI 都应填写外部 WSS 地址，例如：
+
+```text
+wss://your-tunnel-domain
+```
+
+不要在手机里填写 `127.0.0.1:8080`，因为手机上的 `127.0.0.1` 指的是手机自己。如果穿透工具只提供 `http://` 或裸 TCP 端口，先在穿透服务或反向代理中启用 HTTPS/WSS，再连接 App。
+
+方式 B：直接部署到云服务器
+
+需要一台有公网 IP 的服务器（阿里云/腾讯云轻量应用服务器即可，最低配 1 核 1G）。
+
+```bash
+cd server
+npm install
+npm run build
+
+# 如果公网直接访问 8080
+HOST=0.0.0.0 PORT=8080 npm start
+```
+
+方式 C：Windows PowerShell
+
+```powershell
+cd server
+npm install
+npm run build
+
 $env:HOST="127.0.0.1"
 $env:PORT=8080
 npm start
+```
 
-# 或 Docker
+方式 D：Docker
+
+```bash
+cd server
 docker compose up -d
 ```
 
@@ -81,7 +132,7 @@ server {
 }
 ```
 
-### 2. 电脑上安装 CLI
+### 2. 安装 CLI 包装器
 
 ```bash
 cd cli
@@ -90,14 +141,14 @@ npm run build
 npm link
 
 # 配置服务器地址（只需一次）
-remote-claude config --server wss://your-server.com
+remote-claude config --server wss://your-tunnel-domain
 
 # 在任意项目目录启动远程控制版 Claude Code
 cd /path/to/your/project
 remote-claude
 ```
 
-`remote-claude` 是单独的命令，不会覆盖系统里的 `claude`。平时直接运行 `claude` 仍然是默认 Claude Code；只有显式运行 `remote-claude` 时才会启动远程 App 控制流程。
+服务器地址推荐使用 `wss://`。`ws://` 是明文 WebSocket，Android 默认会拦截非白名单明文流量，并且公网使用有中间人风险。
 
 启动后会显示 6 位配对码：
 
@@ -116,7 +167,7 @@ Connected!
   等待手机连接...
 ```
 
-### 3. 安装手机 App
+### 3. 安装并配对手机 App
 
 **方式 A：下载预构建 APK（推荐）**
 
@@ -127,13 +178,68 @@ Connected!
 用 Android Studio 打开 `android/` 目录，连接手机直接运行。
 
 打开 App 后：
-1. 输入服务器地址（如 `ws://your-server.com:8080`）
+1. 输入服务器地址（如 `wss://your-tunnel-domain` 或 `wss://your-server.com`）
 2. 输入 CLI 显示的 6 位配对码
 3. 连接成功后即可看到 Claude Code 的终端输出
 
-如果使用内网穿透，手机里填写外部 WebSocket 地址，例如 `ws://sunqin.ipyingshe.net` 或服务商给出的 `ws://域名:端口`。不要填写 `127.0.0.1:8080`，因为手机上的 `127.0.0.1` 指的是手机自己。
-
 在电脑上按任意键可夺回本地控制权。
+
+### 日常使用流程
+
+每次使用时按这个顺序启动：
+
+1. 启动中继服务器：`HOST=127.0.0.1 PORT=8080 npm start`
+2. 启动支持 HTTPS/WSS 的内网穿透，并确认它转发到 `127.0.0.1:8080`
+3. 在目标项目目录运行 `remote-claude`
+4. 手机 App 填写外部 `wss://...` 地址和当前显示的 6 位配对码
+
+如果配对码过期或 CLI 退出，需要重新运行 `remote-claude` 获取新的配对码。
+
+## 常见问题
+
+### App 点击连接后显示连接断开
+
+先看中继服务器日志。如果手机 App 真的连到了服务器，server 终端会出现 `Connected:` 日志。
+
+如果 server 只看到 CLI 连接和 `Pair code generated`，没有新的 App 连接，通常是手机里的服务器地址没有打到中继服务器：
+
+- 内网穿透必须正在运行。
+- 穿透工具的内网地址应是 `127.0.0.1:8080`。
+- 手机应填写外部地址，例如 `wss://your-tunnel-domain`。
+- 不要填写 `127.0.0.1:8080`。
+- 如果服务商只给 `http://域名` 或远程连接 `域名:端口`，先确认它是否支持 WSS；不支持时需要换支持 HTTPS/WSS 的穿透方式或加一层 Nginx/Cloudflare TLS 代理。
+
+### App 连接按钮一直转
+
+通常表示 App 正在等待 WebSocket 连接或配对确认。按下面顺序检查：
+
+1. CLI 端是否还在显示当前配对码等待手机连接。
+2. 6 位配对码是否是最新的，配对码 5 分钟过期且只能使用一次。
+3. server 日志是否出现 App 的 `Connected:`。
+4. 如果 server 没有 App 连接日志，优先检查穿透地址和手机网络。
+
+### Server 提示 8080 端口被占用
+
+```bash
+lsof -iTCP:8080 -sTCP:LISTEN -n -P
+```
+
+确认占用进程不需要后再停止它：
+
+```bash
+kill <PID>
+```
+
+### `remote-claude` 应该在哪里运行
+
+在你希望 Claude Code 操作的项目目录运行：
+
+```bash
+cd /path/to/your/project
+remote-claude
+```
+
+`remote-claude` 会在当前目录启动真正的 `claude` 子进程。普通 `claude` 命令不会被替换。
 
 ## 项目结构
 

@@ -14,10 +14,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.remoteclaude.crypto.E2EEncryption
 import com.remoteclaude.network.RelayEvent
 import com.remoteclaude.network.RelayService
-import com.remoteclaude.network.WebSocketClient
 import com.remoteclaude.terminal.StyledLine
 import com.remoteclaude.terminal.TerminalClient
 import com.remoteclaude.ui.terminal.AnsiTerminalView
@@ -27,11 +25,10 @@ import com.remoteclaude.ui.terminal.TerminalInputBar
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TerminalScreen(
-    relayUrl: String,
+    relayService: RelayService,
     sessionId: String,
     onDisconnected: () -> Unit
 ) {
-    val relayService = remember { RelayService(WebSocketClient(), E2EEncryption()) }
     val terminalClient = remember { TerminalClient() }
     var terminalLines by remember { mutableStateOf(emptyList<StyledLine>()) }
     var rawOutput by remember { mutableStateOf("") }
@@ -45,17 +42,14 @@ fun TerminalScreen(
         }
     }
 
-    LaunchedEffect(relayUrl) {
-        relayService.connect(relayUrl)
-    }
-
     LaunchedEffect(relayService) {
         relayService.events.collect { event ->
             when (event) {
                 is RelayEvent.TerminalOutput -> {
-                    terminalClient.feed(event.data)
                     val decoded = Base64.decode(event.data, Base64.DEFAULT)
-                    rawOutput += String(decoded, Charsets.UTF_8)
+                    val text = String(decoded, Charsets.UTF_8)
+                    terminalClient.feed(text)
+                    rawOutput += text
                 }
                 is RelayEvent.PermissionRequest -> {
                     permissionRequest = event
