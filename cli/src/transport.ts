@@ -1,5 +1,5 @@
 import WebSocket from "ws";
-import { createMessage } from "../../shared/protocol.js";
+import { createMessage } from "./protocol.js";
 
 type MessageHandler = (msg: any) => void;
 

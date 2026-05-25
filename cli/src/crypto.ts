@@ -1,11 +1,21 @@
 import nacl from "tweetnacl";
-import {
-  decodeUTF8,
-  encodeUTF8,
-  encodeBase64,
-  decodeBase64,
-} from "tweetnacl-util";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
+
+function encodeBase64(data: Uint8Array): string {
+  return Buffer.from(data).toString("base64");
+}
+
+function decodeBase64(s: string): Uint8Array {
+  return Buffer.from(s, "base64");
+}
+
+function encodeUTF8(data: Uint8Array): string {
+  return Buffer.from(data).toString("utf-8");
+}
+
+function decodeUTF8(s: string): Uint8Array {
+  return Buffer.from(s, "utf-8");
+}
 import { join } from "path";
 import { homedir } from "os";
 

@@ -2,7 +2,7 @@ import { spawn, IPty } from "node-pty";
 import { encodeBase64 } from "tweetnacl-util";
 import { E2ECrypto } from "./crypto.js";
 import { Transport } from "./transport.js";
-import { createInnerMessage } from "../../shared/protocol.js";
+import { createInnerMessage } from "./protocol.js";
 import { PermissionHandler } from "./permission.js";
 
 export class PtyManager {

@@ -1,4 +1,4 @@
-import { createInnerMessage } from "../../shared/protocol.js";
+import { createInnerMessage } from "./protocol.js";
 import { E2ECrypto } from "./crypto.js";
 import { Transport } from "./transport.js";
 

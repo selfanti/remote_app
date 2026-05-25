@@ -2,7 +2,7 @@ import chalk from "chalk";
 import { E2ECrypto } from "./crypto.js";
 import { Transport } from "./transport.js";
 import { PtyManager } from "./pty.js";
-import { createMessage, InnerPayload } from "../../shared/protocol.js";
+import { createMessage, InnerPayload } from "./protocol.js";
 
 export class RemoteClaudeApp {
   private crypto: E2ECrypto;
