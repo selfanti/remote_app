@@ -12,6 +12,10 @@ export class Database {
     this.migrate();
   }
 
+  close() {
+    this.db.close();
+  }
+
   private migrate() {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS sessions (

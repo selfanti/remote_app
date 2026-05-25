@@ -11,6 +11,7 @@ export class PtyManager {
   private transport: Transport;
   private permission: PermissionHandler;
   private isRemoteControlled = false;
+  private stdinHandler?: (data: Buffer) => void;
 
   constructor(crypto: E2ECrypto, transport: Transport) {
     this.crypto = crypto;
@@ -40,14 +41,19 @@ export class PtyManager {
 
     this.pty.onExit(({ exitCode }) => {
       console.log(`\nClaude Code exited with code ${exitCode}`);
-      this.sendStatusUpdate("disconnected");
+      if (this.isRemoteControlled) {
+        this.sendStatusUpdate("disconnected");
+      }
+      this.cleanup();
       process.exit(exitCode);
     });
 
     // Local keyboard input
-    process.stdin.setRawMode(true);
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(true);
+    }
     process.stdin.resume();
-    process.stdin.on("data", (data) => {
+    this.stdinHandler = (data: Buffer) => {
       if (!this.pty) return;
 
       // If remote is controlling, take back control on any key
@@ -57,7 +63,8 @@ export class PtyManager {
       }
 
       this.pty.write(data.toString());
-    });
+    };
+    process.stdin.on("data", this.stdinHandler);
   }
 
   enableRemoteControl() {
@@ -108,5 +115,18 @@ export class PtyManager {
       payload: { ciphertext: encrypted },
       timestamp: Date.now(),
     });
+  }
+
+  private cleanup() {
+    if (this.stdinHandler) {
+      process.stdin.off("data", this.stdinHandler);
+      this.stdinHandler = undefined;
+    }
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(false);
+    }
+    process.stdin.pause();
+    this.transport.close();
+    this.pty = null;
   }
 }

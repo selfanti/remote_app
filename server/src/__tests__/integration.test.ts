@@ -16,8 +16,16 @@ describe("Integration: Full server flow", () => {
     const pairing = new PairingManager(sessions, db);
     const router = new MessageRouter(sessions, pairing);
 
-    wss = new WebSocketServer({ port: 0 });
-    port = (wss.address() as any).port;
+    wss = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+    await new Promise<void>((resolve, reject) => {
+      wss.once("listening", resolve);
+      wss.once("error", reject);
+    });
+    const address = wss.address();
+    if (!address || typeof address === "string") {
+      throw new Error("WebSocket server did not bind to a TCP port");
+    }
+    port = address.port;
 
     wss.on("connection", (ws) => {
       ws.on("message", (raw) => {
@@ -30,13 +38,18 @@ describe("Integration: Full server flow", () => {
     });
   });
 
-  afterAll(() => {
-    wss.close();
+  afterAll(async () => {
+    await new Promise<void>((resolve, reject) => {
+      wss.close((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
   });
 
   function connect(): Promise<WebSocket> {
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket(`ws://localhost:${port}`);
+      const ws = new WebSocket(`ws://127.0.0.1:${port}`);
       ws.on("open", () => resolve(ws));
       ws.on("error", reject);
     });
@@ -53,18 +66,25 @@ describe("Integration: Full server flow", () => {
 
   function waitForType(msgs: any[], type: string, timeout = 3000): Promise<any> {
     return new Promise((resolve, reject) => {
-      const check = () => {
-        const found = msgs.find((m) => m.type === type);
-        if (found) return resolve(found);
-      };
-      // Check existing
-      if (check()) return;
+      const check = () => msgs.find((m) => m.type === type);
 
-      const timer = setTimeout(() => reject(new Error(`Timeout waiting for ${type}. Got: ${msgs.map((m) => m.type)}`)), timeout);
-      const interval = setInterval(() => {
-        if (check()) {
+      const existing = check();
+      if (existing) {
+        resolve(existing);
+        return;
+      }
+
+      let interval: ReturnType<typeof setInterval>;
+      const timer = setTimeout(() => {
+        clearInterval(interval);
+        reject(new Error(`Timeout waiting for ${type}. Got: ${msgs.map((m) => m.type)}`));
+      }, timeout);
+      interval = setInterval(() => {
+        const found = check();
+        if (found) {
           clearTimeout(timer);
           clearInterval(interval);
+          resolve(found);
         }
       }, 50);
     });

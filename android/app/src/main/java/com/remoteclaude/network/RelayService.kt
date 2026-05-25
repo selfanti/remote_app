@@ -5,6 +5,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
@@ -41,10 +42,17 @@ class RelayService(
     val isConnected: StateFlow<Boolean> = _isConnected
 
     fun connect(url: String) {
+        val normalizedUrl = normalizeRelayUrl(url)
         CoroutineScope(Dispatchers.IO).launch {
-            wsClient.connect(url).collect { msg ->
-                handleMessage(msg)
-            }
+            wsClient.connect(normalizedUrl)
+                .catch { e ->
+                    Timber.e(e, "Relay connection failed")
+                    _events.value = RelayEvent.Error("CONNECTION_FAILED", e.message ?: "Connection failed")
+                    _isConnected.value = false
+                }
+                .collect { msg ->
+                    handleMessage(msg)
+                }
             _events.value = RelayEvent.Disconnected
             _isConnected.value = false
         }
@@ -188,5 +196,17 @@ class RelayService(
 
     fun disconnect() {
         wsClient.disconnect()
+    }
+
+    companion object {
+        fun normalizeRelayUrl(url: String): String {
+            val trimmed = url.trim()
+            return when {
+                trimmed.startsWith("ws://") || trimmed.startsWith("wss://") -> trimmed
+                trimmed.startsWith("https://") -> "wss://" + trimmed.removePrefix("https://")
+                trimmed.startsWith("http://") -> "ws://" + trimmed.removePrefix("http://")
+                else -> "ws://$trimmed"
+            }
+        }
     }
 }

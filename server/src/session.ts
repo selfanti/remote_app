@@ -16,7 +16,8 @@ export class SessionManager {
   constructor(db: Database) {
     this.db = db;
     // Clean expired sessions every 5 minutes
-    setInterval(() => this.cleanExpired(), 5 * 60 * 1000);
+    const cleanupTimer = setInterval(() => this.cleanExpired(), 5 * 60 * 1000);
+    cleanupTimer.unref();
   }
 
   createSession(sessionId: string, cliPublicKey: string, cliWs: WebSocket) {

@@ -138,6 +138,7 @@ fun PairingScreen(
                 if (pairCode.length == 6) {
                     isConnecting = true
                     errorMessage = null
+                    relayUrl = RelayService.normalizeRelayUrl(relayUrl)
                     relayService.connect(relayUrl)
                     relayService.submitPairCode(pairCode)
                 }

@@ -32,18 +32,34 @@
 ### 1. 部署中继服务器
 
 需要一台有公网 IP 的服务器（阿里云/腾讯云轻量应用服务器即可，最低配 1 核 1G）。
+如果你在 WSL2 中使用 Claude Code，并通过内网穿透暴露本机服务，建议中继服务器也运行在 WSL2 中，让穿透工具转发到 WSL2 的 `127.0.0.1:8080`。
 
 ```bash
 cd server
 npm install
 npm run build
 
-# 直接运行
-PORT=8080 node dist/index.js
+# WSL2/Linux 直接运行
+HOST=127.0.0.1 PORT=8080 npm start
+
+# Windows PowerShell
+$env:HOST="127.0.0.1"
+$env:PORT=8080
+npm start
 
 # 或 Docker
 docker compose up -d
 ```
+
+Windows 上如果只在本机测试，可额外设置 `$env:HOST="127.0.0.1"`；如果要让手机或其他设备连接，保持默认 `0.0.0.0`，并确认防火墙允许 Node.js 监听该端口。`npm install` 时出现 `npm warn cleanup EACCES` 通常是旧的 `node_modules` 文件被终端、编辑器或杀毒软件占用；关闭相关进程后删除 `node_modules`，再用 `npm ci` 重新安装即可。`prebuild-install` 的 deprecated 提示来自 `better-sqlite3` 的依赖链，构建能通过时不是启动失败的直接原因。
+
+如果启动时报 `Port 8080 is already in use`，先找出占用进程：
+
+```bash
+lsof -iTCP:8080 -sTCP:LISTEN -n -P
+```
+
+确认不是正在使用的服务后再停止对应 PID。
 
 生产环境建议加 Nginx 反向代理 + Let's Encrypt TLS：
 
@@ -71,13 +87,17 @@ server {
 cd cli
 npm install
 npm run build
+npm link
 
 # 配置服务器地址（只需一次）
-node dist/bin/remote-claude.js config --server wss://your-server.com
+remote-claude config --server wss://your-server.com
 
-# 启动（替代 claude 命令）
-node dist/bin/remote-claude.js
+# 在任意项目目录启动远程控制版 Claude Code
+cd /path/to/your/project
+remote-claude
 ```
+
+`remote-claude` 是单独的命令，不会覆盖系统里的 `claude`。平时直接运行 `claude` 仍然是默认 Claude Code；只有显式运行 `remote-claude` 时才会启动远程 App 控制流程。
 
 启动后会显示 6 位配对码：
 
@@ -110,6 +130,8 @@ Connected!
 1. 输入服务器地址（如 `ws://your-server.com:8080`）
 2. 输入 CLI 显示的 6 位配对码
 3. 连接成功后即可看到 Claude Code 的终端输出
+
+如果使用内网穿透，手机里填写外部 WebSocket 地址，例如 `ws://sunqin.ipyingshe.net` 或服务商给出的 `ws://域名:端口`。不要填写 `127.0.0.1:8080`，因为手机上的 `127.0.0.1` 指的是手机自己。
 
 在电脑上按任意键可夺回本地控制权。
 
@@ -215,9 +237,27 @@ cd server && npm install && npm run dev
 # CLI
 cd cli && npm install && npm run dev
 
-# Android
-# 用 Android Studio 打开 android/ 目录
+# Android 本地构建
+cd android
+./gradlew assembleDebug
 ```
+
+### WSL2 Android SDK
+
+如果你希望在 WSL2 中本地构建 Android App，可以安装 Android command-line tools 到用户目录，例如 `/home/tao/android-sdk`，并在 `android/local.properties` 中写入：
+
+```properties
+sdk.dir=/home/tao/android-sdk
+```
+
+本项目需要：
+
+```bash
+sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+sdkmanager --licenses
+```
+
+如果网络需要代理，先启用你的 shell 代理配置，例如 `proxy`，或导出 `all_proxy/http_proxy/https_proxy` 后再运行 `./gradlew assembleDebug`。`local.properties` 是本机路径配置，不应提交到 Git。
 
 ## License
 

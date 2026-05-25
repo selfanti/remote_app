@@ -33,7 +33,14 @@ class WebSocketClient {
 
     fun connect(url: String): Flow<WireMessage> = callbackFlow {
         intentionallyClosed = false
-        val request = Request.Builder().url(url).build()
+        val request = try {
+            Request.Builder().url(url).build()
+        } catch (e: IllegalArgumentException) {
+            Timber.e(e, "Invalid WebSocket URL: $url")
+            close(e)
+            awaitClose { }
+            return@callbackFlow
+        }
 
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(ws: WebSocket, response: Response) {
