@@ -171,7 +171,7 @@ Connected!
 
 **方式 A：下载预构建 APK（推荐）**
 
-推送到 GitHub 后，Actions 会自动构建 APK。进入仓库的 **Actions → Build Android APK → Artifacts** 下载 `remote-claude-debug`。
+推送到 GitHub 后，Actions 会自动构建 APK。进入仓库的 **Actions → Build Android APK → Artifacts** 下载 `remote-claude-debug`。Artifact 中的 APK 文件名会带版本号，例如 `RemoteClaude-v0.1.0-1-debug.apk`，便于区分手机上安装的是哪一版。
 
 **方式 B：Android Studio 本地构建**
 

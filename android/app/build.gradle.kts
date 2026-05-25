@@ -5,6 +5,9 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+val appVersionCode = 1
+val appVersionName = "0.1.0"
+
 android {
     namespace = "com.remoteclaude"
     compileSdk = 35
@@ -13,8 +16,8 @@ android {
         applicationId = "com.remoteclaude"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
@@ -43,6 +46,20 @@ android {
     buildFeatures {
         compose = true
     }
+}
+
+tasks.register<Copy>("copyVersionedDebugApk") {
+    dependsOn("assembleDebug")
+    from(layout.buildDirectory.file("outputs/apk/debug/app-debug.apk"))
+    into(layout.buildDirectory.dir("outputs/apk/versioned"))
+    rename { "RemoteClaude-v$appVersionName-$appVersionCode-debug.apk" }
+}
+
+tasks.register<Copy>("copyVersionedReleaseApk") {
+    dependsOn("assembleRelease")
+    from(layout.buildDirectory.file("outputs/apk/release/app-release-unsigned.apk"))
+    into(layout.buildDirectory.dir("outputs/apk/versioned"))
+    rename { "RemoteClaude-v$appVersionName-$appVersionCode-release-unsigned.apk" }
 }
 
 dependencies {
