@@ -74,8 +74,7 @@ dependencies {
     // Serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
-    // Terminal emulator (Termux)
-    implementation("com.github.termux:terminal-emulator:v0.118.0")
+    // Terminal emulator - custom ANSI parser (no external dependency)
 
     // Room database
     implementation("androidx.room:room-runtime:2.6.1")
